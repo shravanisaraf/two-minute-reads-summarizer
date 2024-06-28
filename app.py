@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, render_template, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 import urllib.parse
@@ -43,7 +43,11 @@ def fetch_url_content(url):
             # Summarize the content
             summarized_content = summarize_content(content)
 
-            return f"**Page Title:** {page_title}\n\n**Original Content:**\n{content}\n\n**Summarized Content:**\n{summarized_content}"
+            return {
+                "page_title": page_title,
+                "content": content,
+                "summarized_content": summarized_content
+            }
         else:
             logging.error(f"Failed to retrieve URL. HTTP Status Code: {response.status_code}")
             return f"Failed to retrieve URL. HTTP Status Code: {response.status_code}"
@@ -61,7 +65,6 @@ def is_allowed_by_robots(url):
 
 def summarize_content(content):
     try:
-        # Adjusted max_length for BART
         inputs = tokenizer.encode("summarize: " + content, return_tensors="pt", max_length=1024, truncation=True)
         summary_ids = model.generate(inputs, max_length=150, min_length=30, length_penalty=2.0, num_beams=4, early_stopping=True)
         summarized = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
@@ -71,15 +74,18 @@ def summarize_content(content):
         return "An error occurred during summarization."
 
 @app.route('/')
-def home():
+def index():
     return render_template('index.html')
 
 @app.route('/summarize', methods=['POST'])
 def summarize():
     data = request.get_json()
     url = data.get('url')
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+
     content = fetch_url_content(url)
-    return jsonify({'content': content})
+    return jsonify(content)
 
 if __name__ == '__main__':
     app.run(debug=True)
